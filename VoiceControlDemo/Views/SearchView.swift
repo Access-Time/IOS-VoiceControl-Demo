@@ -23,7 +23,7 @@ struct SearchView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
 
-                    TextField("Search for breeds...", text: $searchQuery)
+                    TextField("Enter breed name...", text: $searchQuery)
                         .accessibilityLabel("Look for")
                 }
                 .padding()

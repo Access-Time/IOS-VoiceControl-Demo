@@ -13,6 +13,7 @@ struct BrowseView: View {
     @State private var selectedImage: CatImage?
     @State private var isZoomed: Bool = false
     @State private var motionManager = CMMotionManager()
+    @State private var lastShakeTime: Date = .distantPast
 
     let columns = [
         GridItem(.flexible()),
@@ -37,14 +38,16 @@ struct BrowseView: View {
             }
             .navigationTitle("Browse Cats")
             .sheet(item: $selectedImage) { catImage in
-                ImageDetailView(
-                    catImage: catImage,
-                    isZoomed: $isZoomed,
-                    onLike: {
-                        viewModel.toggleLike(imageId: catImage.id)
-                        selectedImage = nil
-                    }
-                )
+                if let currentImage = viewModel.browseImages.first(where: { $0.id == catImage.id }) {
+                    ImageDetailView(
+                        catImage: currentImage,
+                        isZoomed: $isZoomed,
+                        onLike: {
+                            viewModel.toggleLike(imageId: catImage.id)
+                            selectedImage = nil
+                        }
+                    )
+                }
             }
             .onAppear {
                 startShakeDetection()
@@ -58,14 +61,19 @@ struct BrowseView: View {
     // ISSUE: Shake gesture to like - not accessible via voice control
     private func startShakeDetection() {
         if motionManager.isAccelerometerAvailable {
-            motionManager.accelerometerUpdateInterval = 0.1
-            motionManager.startAccelerometerUpdates(to: .main) { data, error in
+            motionManager.accelerometerUpdateInterval = 0.05
+            motionManager.startAccelerometerUpdates(to: .main) { [self] data, error in
                 guard let data = data else { return }
                 let acceleration = data.acceleration
-                let threshold = 2.5
+                let threshold = 2.0
+
+                // Debounce: Only trigger if at least 0.5 seconds have passed since last shake
+                let now = Date()
+                guard now.timeIntervalSince(lastShakeTime) > 0.5 else { return }
 
                 if abs(acceleration.x) > threshold || abs(acceleration.y) > threshold || abs(acceleration.z) > threshold {
                     if let selectedImage = selectedImage {
+                        lastShakeTime = now
                         viewModel.toggleLike(imageId: selectedImage.id)
                     }
                 }
@@ -121,14 +129,23 @@ struct ImageDetailView: View {
 
             Spacer()
 
-            Image(catImage.imageName)
-                .resizable()
-                .aspectRatio(contentMode: isZoomed ? .fill : .fit)
-                .cornerRadius(10)
-                .scaleEffect(isZoomed ? 2.0 : 1.0)
-                .animation(.spring(), value: isZoomed)
-                .padding()
-                .clipped()
+            ZStack(alignment: .topTrailing) {
+                Image(catImage.imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: isZoomed ? .fill : .fit)
+                    .cornerRadius(10)
+                    .scaleEffect(isZoomed ? 2.0 : 1.0)
+                    .animation(.spring(), value: isZoomed)
+                    .padding()
+                    .clipped()
+
+                if catImage.isLiked {
+                    Image(systemName: "heart.fill")
+                        .font(.largeTitle)
+                        .foregroundColor(.red)
+                        .padding(20)
+                }
+            }
 
             HStack(spacing: 30) {
                 // ISSUE: Using magnifying glass (same icon as search)
